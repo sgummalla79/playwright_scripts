@@ -19,6 +19,11 @@ export interface PasskeyStoreConfig {
   storePath: string;
 }
 
+export interface SessionConfig {
+  statePath: string;
+  maxAgeMs: number;
+}
+
 type Env = Record<string, string | undefined>;
 
 function required(env: Env, key: string): string {
@@ -60,4 +65,11 @@ export function loadLoginFlowConfig(env: Env = loadEnv()): LoginFlowConfig {
 
 export function loadPasskeyStoreConfig(env: Env = loadEnv()): PasskeyStoreConfig {
   return { storePath: required(env, ENV_KEYS.passkeyStorePath) };
+}
+
+export function loadSessionConfig(env: Env = loadEnv()): SessionConfig {
+  return {
+    statePath: env[ENV_KEYS.sessionStatePath] || ENV_DEFAULTS.sessionStatePath,
+    maxAgeMs: optionalNumber(env, ENV_KEYS.sessionMaxAgeMs, ENV_DEFAULTS.sessionMaxAgeMs),
+  };
 }

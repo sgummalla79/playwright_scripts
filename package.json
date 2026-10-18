@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "test:bootstrap": "playwright test --project=bootstrap",
     "test:bootstrap:headed": "playwright test --project=bootstrap --headed",
-    "test": "playwright test --project=unattended"
+    "test": "playwright test --project=unattended",
+    "test:app": "playwright test --project=app"
   },
   "license": "MIT",
   "devDependencies": {

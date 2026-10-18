@@ -1,7 +1,9 @@
 import { defineConfig } from '@playwright/test';
-import { loadEnv, loadLoginFlowConfig } from './src/config/config';
+import { loadEnv, loadLoginFlowConfig, loadSessionConfig } from './src/config/config';
 
-const { loginTimeoutMs } = loadLoginFlowConfig(loadEnv());
+const env = loadEnv();
+const { loginTimeoutMs } = loadLoginFlowConfig(env);
+const { statePath } = loadSessionConfig(env);
 
 /** Login runs several sequential steps (login, passkey, consent); allow headroom per step. */
 const LOGIN_TEST_TIMEOUT_MULTIPLIER = 2;
@@ -16,5 +18,14 @@ export default defineConfig({
   projects: [
     { name: 'bootstrap', testMatch: /bootstrap\.spec\.ts/ },
     { name: 'unattended', testMatch: /login\.spec\.ts/ },
+    // Logs in once (or reuses a fresh saved session) and stores it at SESSION_STATE_PATH.
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    // Regular tests: depend on setup and start already authenticated.
+    {
+      name: 'app',
+      testMatch: /.*\.app\.spec\.ts/,
+      dependencies: ['setup'],
+      use: { storageState: statePath },
+    },
   ],
 });

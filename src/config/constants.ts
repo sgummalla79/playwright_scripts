@@ -15,12 +15,17 @@ export const ENV_KEYS = {
   passkeyStorePath: 'PASSKEY_STORE_PATH',
   returnPath: 'SF_RETURN_PATH',
   loginTimeoutMs: 'SF_LOGIN_TIMEOUT_MS',
+  sessionStatePath: 'SESSION_STATE_PATH',
+  sessionMaxAgeMs: 'SESSION_MAX_AGE_MS',
 } as const;
 
 /** Defaults for optional env vars (tunables, not secrets). */
 export const ENV_DEFAULTS = {
   returnPath: '/lightning/page/home',
   loginTimeoutMs: 60_000,
+  sessionStatePath: './.secrets/session.json',
+  /** Reuse a saved session younger than this; keep below the org's session timeout (Setup > Session Settings). */
+  sessionMaxAgeMs: 1_800_000,
 } as const;
 
 /** Salesforce endpoint paths — fixed by the platform. */
@@ -79,3 +84,6 @@ export const PASSKEY_UI = {
   /** URL fragment of the "Verify Your Identity" page that asks for an existing passkey */
   verificationUrlFragment: '/verification/method/UnifiedPasskeyVerificationUi',
 } as const;
+
+/** Suffix of the metadata file stored next to the Playwright storageState file. */
+export const SESSION_META_SUFFIX = '.meta.json';
