@@ -152,3 +152,6 @@ vite.config.ts.timestamp-*
 .secrets/
 test-results/
 playwright-report/
+
+# test screenshots (may contain org data)
+artifacts/

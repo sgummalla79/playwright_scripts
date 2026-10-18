@@ -17,6 +17,8 @@ export const ENV_KEYS = {
   loginTimeoutMs: 'SF_LOGIN_TIMEOUT_MS',
   sessionStatePath: 'SESSION_STATE_PATH',
   sessionMaxAgeMs: 'SESSION_MAX_AGE_MS',
+  setupBaseUrl: 'SF_SETUP_BASE_URL',
+  screenshotDir: 'SCREENSHOT_DIR',
 } as const;
 
 /** Defaults for optional env vars (tunables, not secrets). */
@@ -26,12 +28,15 @@ export const ENV_DEFAULTS = {
   sessionStatePath: './.secrets/session.json',
   /** Reuse a saved session younger than this; keep below the org's session timeout (Setup > Session Settings). */
   sessionMaxAgeMs: 1_800_000,
+  screenshotDir: './artifacts/screenshots',
 } as const;
 
 /** Salesforce endpoint paths — fixed by the platform. */
 export const SF_PATHS = {
   oauthAuthorize: '/services/oauth2/authorize',
   oauthToken: '/services/oauth2/token',
+  /** Setup page that may require step-up (passkey) re-authentication */
+  authProvidersSetup: '/lightning/setup/AuthProviders/home',
 } as const;
 
 /** OAuth 2.0 protocol literals — fixed by RFC 6749 / RFC 7636. */
@@ -87,3 +92,15 @@ export const PASSKEY_UI = {
 
 /** Suffix of the metadata file stored next to the Playwright storageState file. */
 export const SESSION_META_SUFFIX = '.meta.json';
+
+/** Consecutive polls the target page must hold before step-up is considered finished (guards against late client-side redirects). */
+export const STEP_UP_STABLE_POLLS = 4;
+
+/** Max time to wait for a Lightning page to stop loading before a screenshot; it may never go fully idle (polling), so this is a cap, not an error. */
+export const SCREENSHOT_SETTLE_TIMEOUT_MS = 10_000;
+
+/** Setup page content markers (locale-specific copy), used to know a page has really rendered. */
+export const SETUP_UI = {
+  /** Column header of the Auth Providers list; it renders inside an iframe only after any step-up completes. */
+  authProvidersReadyText: 'URL Suffix',
+} as const;

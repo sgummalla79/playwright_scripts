@@ -24,6 +24,11 @@ export interface SessionConfig {
   maxAgeMs: number;
 }
 
+export interface SetupConfig {
+  /** Setup domain, e.g. https://<mydomain>.my.salesforce-setup.com */
+  baseUrl: string;
+}
+
 type Env = Record<string, string | undefined>;
 
 function required(env: Env, key: string): string {
@@ -72,4 +77,12 @@ export function loadSessionConfig(env: Env = loadEnv()): SessionConfig {
     statePath: env[ENV_KEYS.sessionStatePath] || ENV_DEFAULTS.sessionStatePath,
     maxAgeMs: optionalNumber(env, ENV_KEYS.sessionMaxAgeMs, ENV_DEFAULTS.sessionMaxAgeMs),
   };
+}
+
+export function loadSetupConfig(env: Env = loadEnv()): SetupConfig {
+  return { baseUrl: required(env, ENV_KEYS.setupBaseUrl) };
+}
+
+export function loadScreenshotDir(env: Env = loadEnv()): string {
+  return env[ENV_KEYS.screenshotDir] || ENV_DEFAULTS.screenshotDir;
 }

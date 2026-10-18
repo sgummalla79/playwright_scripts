@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { SessionConfig } from '../config/config';
 import { SESSION_META_SUFFIX } from '../config/constants';
@@ -16,9 +16,11 @@ export class FileSessionStore implements SessionStore {
     this.metaPath = `${config.statePath}${SESSION_META_SUFFIX}`;
   }
 
+  /** Call after Playwright writes the storageState file: it creates it world-readable (644). */
   saveMeta(meta: SessionMeta): void {
     mkdirSync(dirname(this.metaPath), { recursive: true });
     writeFileSync(this.metaPath, JSON.stringify(meta, null, 2), { mode: OWNER_ONLY_FILE_MODE });
+    if (existsSync(this.statePath)) chmodSync(this.statePath, OWNER_ONLY_FILE_MODE);
   }
 
   loadMeta(): SessionMeta | undefined {
