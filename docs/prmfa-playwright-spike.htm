@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spike: Automating Phishing-Resistant MFA (PRMFA) for Playwright Testing via JWT Bearer + frontdoor.jsp</title>
+<style>
+  :root {
+    --ink: #1b1f24;
+    --muted: #5b6572;
+    --line: #e2e5ea;
+    --bg-code: #0f1115;
+    --accent: #0b63d6;
+    --warn-bg: #fff4e5;
+    --warn-border: #e8a33d;
+    --danger-bg: #fdeaea;
+    --danger-border: #d64545;
+    --ok-bg: #eaf6ec;
+    --ok-border: #3fa75a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    line-height: 1.55;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+    background: #fff;
+  }
+  h1 { font-size: 1.65rem; margin-bottom: 4px; }
+  h2 {
+    font-size: 1.25rem;
+    margin-top: 2.4em;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--line);
+  }
+  h3 { font-size: 1.05rem; margin-top: 1.8em; }
+  .subtitle { color: var(--muted); margin-top: 0; margin-bottom: 1.6em; font-size: 0.95rem; }
+  .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 1.6em; font-size: 0.9rem; }
+  .meta-table td { padding: 4px 10px 4px 0; vertical-align: top; }
+  .meta-table td:first-child { color: var(--muted); white-space: nowrap; width: 140px; }
+  code {
+    font-family: SFMono-Regular, Consolas, Menlo, monospace;
+    font-size: 0.86em;
+    background: #f1f3f5;
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--bg-code);
+    color: #e6e9ef;
+    padding: 16px 18px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: #f0f6fe;
+    padding: 10px 16px;
+    margin: 1.2em 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.93rem;
+  }
+  .callout.warn { border-color: var(--warn-border); background: var(--warn-bg); }
+  .callout.danger { border-color: var(--danger-border); background: var(--danger-bg); }
+  .callout.ok { border-color: var(--ok-border); background: var(--ok-bg); }
+  .callout strong.label { display: block; margin-bottom: 4px; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em; }
+  table.verify {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0 1.6em;
+    font-size: 0.88rem;
+  }
+  table.verify th, table.verify td {
+    border: 1px solid var(--line);
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.verify th { background: #f7f8fa; }
+  .tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+  .tag.confirmed { background: var(--ok-bg); color: #246b36; border: 1px solid var(--ok-border); }
+  .tag.revised { background: var(--warn-bg); color: #8a5a16; border: 1px solid var(--warn-border); }
+  .tag.flag { background: var(--danger-bg); color: #a52a2a; border: 1px solid var(--danger-border); }
+  ol, ul { padding-left: 1.4em; }
+  li { margin-bottom: 0.3em; }
+  footer {
+    margin-top: 3em;
+    padding-top: 1em;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .srclist li { font-size: 0.85rem; margin-bottom: 0.5em; }
+</style>
+</head>
+<body>
+
+<h1>Spike: Automating Phishing-Resistant MFA (PRMFA) for Playwright Testing</h1>
+<p class="subtitle">JWT Bearer flow + frontdoor.jsp session bridging, under Salesforce's phishing-resistant MFA enforcement for privileged users</p>
+
+<table class="meta-table">
+  <tr><td>Prepared</td><td>2026-10-15</td></tr>
+  <tr><td>Scope</td><td>Technical review of a proposed Playwright virtual-authenticator approach for unattended login as a privileged (Sysadmin-equivalent) Salesforce user, post-MFA-enforcement</td></tr>
+  <tr><td>Status</td><td>Technically validated against the Playwright API and Salesforce documentation. See the <a href="#risk">Risk &amp; Supportability</a> section before using this in any pipeline.</td></tr>
+</table>
+
+<h2>1. TL;DR</h2>
+<p>
+The core idea in the spike is sound and the Playwright API calls are, with one ordering fix, real: Playwright ships a
+<code>BrowserContext.credentials</code> virtual WebAuthn authenticator (added in v1.61) that can register and replay a
+software passkey without any hardware, and Salesforce does not require hardware attestation for passkeys — a
+synced/virtual passkey is explicitly supported. So yes, <strong>this is technically possible</strong>.
+</p>
+<p>
+Two things in the original spike need correcting before you build on it:
+</p>
+<ol>
+  <li><strong>Why the challenge appears at all</strong> is documented, not just empirically observed — see <a href="#why">§3</a>. It isn't a frontdoor.jsp quirk, it's by design: Salesforce never transfers a UI session's MFA assurance level onto an OAuth access token, so bridging that token back into a UI session (which is literally what frontdoor.jsp does) re-triggers the check.</li>
+  <li><strong>Salesforce's own documentation explicitly disclaims this exact workaround</strong> for privileged accounts — see <a href="#risk">§6</a>. This changes the recommendation from "ship it" to "get this signed off before it goes into a pipeline against a Sysadmin-tier identity."</li>
+</ol>
+
+<h2 id="why">2. What PRMFA enforcement actually changed</h2>
+<p>
+"PRMFA" isn't a Salesforce product acronym — it's shorthand for <strong>phishing-resistant MFA</strong>, which Salesforce is
+enforcing for a defined tier of <strong>privileged users</strong>. A user counts as privileged if they have any of:
+</p>
+<ul>
+  <li>System Administrator profile</li>
+  <li>Author Apex permission</li>
+  <li>Customize Application permission</li>
+  <li>Modify All Data permission</li>
+  <li>View All Data permission</li>
+</ul>
+<p>
+For direct UI logins, privileged users must complete MFA with a <strong>passkey</strong> (built-in authenticator or
+security key) — they can't fall back to Salesforce Authenticator or a TOTP app once enforcement is on. Non-privileged
+users still see passkey registration first, but can choose another method.
+</p>
+<div class="callout">
+  <strong class="label">Confirmed in docs</strong>
+  Salesforce does <em>not</em> require hardware attestation for passkeys. The platform explicitly supports
+  "passkeys managed through a Password Manager or cloud keychain, provided it is FIDO2/WebAuthn-compliant" — i.e.
+  software/synced passkeys are a first-class, supported credential type, not just a loophole. This is the real reason
+  a Playwright virtual authenticator (also a software FIDO2 authenticator) is accepted.
+</div>
+
+<h2 id="why2">3. Why JWT Bearer still hits <code>AddPasskeyUi</code></h2>
+<p>
+This is the part the spike treated as an observed fact. Salesforce documents the mechanism directly, under
+<em>Multi-Factor Authentication for API Access</em>:
+</p>
+<div class="callout">
+  <strong class="label">Salesforce documentation</strong>
+  "Salesforce can prompt users to verify their identity twice with high-assurance MFA during an OAuth approval flow.
+  The first challenge occurs in the UI session. The second challenge occurs when the client app bridges the access
+  token into the UI. This second challenge happens because <strong>Salesforce doesn't transfer the high-assurance MFA
+  session security level to the access token.</strong>"
+</div>
+<p>
+JWT Bearer is one of the OAuth flows Salesforce explicitly supports for high-assurance MFA session security
+(alongside web server, refresh token, and user-agent flows) — so it mints a valid access token with no interactive
+login. But that token carries no session-security-level pedigree. The moment you take that token's session ID and
+hand it to <code>frontdoor.jsp</code> — which exists specifically to bridge an existing session into a UI
+context — Salesforce evaluates session security for the UI session fresh, sees a privileged user with no
+qualifying MFA on this session, and redirects into passkey registration/assertion
+(<code>/_ui/identity/webauthn/AddPasskeyUi</code>). That's the mechanism; it isn't a bypass of API-level MFA
+(API logins themselves are MFA-exempt by default, and passkeys specifically can't be used to verify identity
+over the API at all) — it's the UI-bridging step re-asserting the UI-session requirement.
+</p>
+<div class="callout warn">
+  <strong class="label">Worth validating in your org</strong>
+  Public frontdoor.jsp documentation describes feeding it the SOAP API <code>sessionId</code> from a
+  <code>login()</code> call, not an OAuth access token. Using an OAuth/JWT-Bearer access token as the
+  <code>sid</code> parameter is a widely used pattern in practice, but it isn't the officially documented contract —
+  confirm it continues to behave as expected in your target org/API version rather than assuming it's guaranteed.
+</div>
+
+<h2>4. Playwright's virtual WebAuthn authenticator — what's actually real</h2>
+<p>
+Verified against the current Playwright API docs (<code>BrowserContext.credentials</code>, added in v1.61):
+</p>
+<table class="verify">
+  <tr><th>Claim in the spike</th><th>Status</th><th>Detail</th></tr>
+  <tr>
+    <td><code>context.credentials.install()</code> exists</td>
+    <td><span class="tag confirmed">Confirmed</span></td>
+    <td>Installs the virtual authenticator into the context, intercepting <code>navigator.credentials.create()</code>/<code>.get()</code> on all pages in that context.</td>
+  </tr>
+  <tr>
+    <td>Must call <code>install()</code> before navigating to the WebAuthn page</td>
+    <td><span class="tag confirmed">Confirmed</span></td>
+    <td>Docs state this as a hard requirement: "until <code>install()</code> is called, no interception is in place and the page sees the platform's native (or absent) WebAuthn behaviour."</td>
+  </tr>
+  <tr>
+    <td><code>context.credentials.create(rpId, options)</code> signature</td>
+    <td><span class="tag confirmed">Confirmed</span></td>
+    <td>Accepts <code>id</code>, <code>privateKey</code>, <code>publicKey</code>, <code>userHandle</code>, <code>signCount</code> — all serializable, matching the spike's bootstrap/re-seed design.</td>
+  </tr>
+  <tr>
+    <td>Credential's private key can be serialized and re-seeded</td>
+    <td><span class="tag confirmed">Confirmed</span></td>
+    <td>This is intentional, per the W3C WebAuthn virtual-authenticator test API that Playwright implements (and that Chrome's DevTools Protocol <code>WebAuthn</code> domain exposes directly) — it's a testing primitive, not a Salesforce weakness. A real hardware or platform authenticator never exposes its private key this way.</td>
+  </tr>
+  <tr>
+    <td>Phase 1 then Phase 2 ordering in the spike's code</td>
+    <td><span class="tag revised">Needs a tweak</span></td>
+    <td>The Phase 2 sample calls <code>credentials.create()</code> then <code>credentials.install()</code> then <code>page.goto()</code>. That ordering works (seeding before install is allowed), but it's easy to get backwards. The one rule that matters: <code>install()</code> must happen before the <code>goto()</code> that triggers the WebAuthn ceremony — not necessarily before <code>create()</code>.</td>
+  </tr>
+  <tr>
+    <td>Requires Playwright ≥ v1.61; Puppeteer needs raw CDP <code>WebAuthn</code> domain</td>
+    <td><span class="tag confirmed">Confirmed</span></td>
+    <td>No higher-level Puppeteer equivalent exists; you'd call <code>WebAuthn.enable</code> → <code>addVirtualAuthenticator</code> → <code>addCredential</code> via <code>page.target().createCDPSession()</code>.</td>
+  </tr>
+</table>
+
+<h3>Corrected two-phase code</h3>
+<pre><code>// Phase 1 — Bootstrap (one-time per org user)
+await context.credentials.install();                      // must precede navigation
+await page.goto(frontdoorUrl, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#savebtn');                    // Salesforce "Create Passkey" button
+await page.click('#savebtn');                               // triggers navigator.credentials.create()
+
+const [cred] = await context.credentials.get({});
+// Persist: cred.id, cred.rpId, cred.privateKey, cred.publicKey, cred.userHandle
+// Treat privateKey as a secret at the same tier as your JWT signing key —
+// it is a complete, replayable MFA factor for this user, nothing weaker.
+</code></pre>
+<pre><code>// Phase 2 — Unattended runs
+const saved = loadFromSecretsStore();
+await context.credentials.create(saved.rpId, {
+  id: saved.id,
+  privateKey: saved.privateKey,
+  publicKey: saved.publicKey,
+  userHandle: saved.userHandle,
+});
+await context.credentials.install();                       // before navigation, same as Phase 1
+await page.goto(frontdoorUrl, { waitUntil: 'domcontentloaded' });
+// navigator.credentials.get() is answered silently by the virtual authenticator
+</code></pre>
+
+<h2>5. Things to validate before relying on this</h2>
+<ul>
+  <li><strong>rpId exactness.</strong> The spike's claim that <code>rpId</code> is the full org domain
+  (e.g. <code>yourorg.my.salesforce.com</code>, not a <code>salesforce.com</code> suffix) is consistent with how
+  WebAuthn relying-party IDs work, but isn't something Salesforce documents explicitly for this flow. Capture it
+  exactly from the Phase 1 bootstrap run and don't hand-construct it.</li>
+  <li><strong>One bootstrap click is unavoidable</strong> — correct. The virtual authenticator removes the need for a
+  real biometric/security key, but something still has to drive the first <code>navigator.credentials.create()</code>
+  call against a live challenge from Salesforce; there's no way to pre-generate a valid credential offline.</li>
+  <li><strong>TOTP automation-user docs don't cover this tier</strong> — correct, and Salesforce says so explicitly
+  (next section).</li>
+</ul>
+
+<h2 id="risk">6. Risk &amp; supportability — read before using this on a privileged account</h2>
+<div class="callout danger">
+  <strong class="label">This is the one correction that changes the recommendation</strong>
+  Salesforce's own guidance on automation accounts states: <em>"Phishing-resistant MFA doesn't work with automation
+  or integration user accounts. Consider removing permissions if possible and completing MFA challenges
+  programmatically with a third-party authenticator app. For use cases that require automation users to have
+  privileged permissions, <strong>contact Salesforce Customer Support.</strong>"</em>
+</div>
+<p>
+In other words: for the exact scenario this spike targets — a privileged, Sysadmin-equivalent automation
+identity — Salesforce's documented position is "talk to us," not "roll your own passkey emulation." A virtual
+WebAuthn authenticator satisfies the WebAuthn ceremony technically, but it is a self-engineered workaround for a
+control Salesforce built specifically to resist exactly this class of replayable, software-only credential for
+privileged accounts. That doesn't mean it won't work — it clearly can, mechanically — but it does mean:
+</p>
+<ul>
+  <li><strong>Get this authorized in writing</strong> by the org's security owner (and, given the explicit
+  "contact Salesforce Customer Support" language, consider actually looping in your Salesforce account team) before
+  wiring it into any CI/CD pipeline against a Sysadmin-tier identity. This is squarely testing/QA automation, but
+  it's also an unsupported path around a control that exists for a reason — treat the sign-off step as part of the
+  implementation, not optional process overhead.</li>
+  <li><strong>Scope down privilege first if you can.</strong> If the automation user doesn't actually need
+  System Administrator / Author Apex / Customize Application / Modify All Data / View All Data, removing those
+  permissions moves it out of the phishing-resistant tier entirely and back onto the officially supported TOTP path
+  (<code>mfa_automation_totp.htm</code>).</li>
+  <li><strong>Restrict to sandbox/non-production orgs</strong> for this pattern unless and until it's explicitly
+  cleared for production use.</li>
+  <li><strong>Store the serialized <code>privateKey</code> as a full MFA bypass credential</strong>, not just
+  as test fixture data — anyone who obtains it can silently satisfy phishing-resistant MFA for that user, which is
+  precisely the attack class passkeys exist to prevent. Same secrets-management tier as a signing key or a service
+  account password, minimum.</li>
+</ul>
+
+<h2>7. Bottom line</h2>
+<table class="verify">
+  <tr><th>Question</th><th>Answer</th></tr>
+  <tr>
+    <td>Is the Playwright virtual-authenticator mechanism real and does it work the way described?</td>
+    <td>Yes — confirmed against the Playwright v1.61+ API and the W3C/CDP WebAuthn virtual-authenticator spec it's built on.</td>
+  </tr>
+  <tr>
+    <td>Does Salesforce accept a software/virtual passkey with no hardware attestation?</td>
+    <td>Yes — Salesforce explicitly supports software/synced passkeys (password managers, cloud keychains); no attestation requirement blocks this.</td>
+  </tr>
+  <tr>
+    <td>Is the double-MFA-challenge behavior (JWT Bearer token survives, but frontdoor.jsp re-triggers passkey) documented, or a quirk?</td>
+    <td>Documented behavior — session security level is never carried onto an access token by design.</td>
+  </tr>
+  <tr>
+    <td>Is this an officially sanctioned pattern for a Sysadmin-tier automation user?</td>
+    <td>No — Salesforce's own docs say to contact Salesforce Customer Support for exactly this case. Proceed only with explicit sign-off.</td>
+  </tr>
+</table>
+
+<h2>Sources</h2>
+<ul class="srclist">
+  <li><a href="https://help.salesforce.com/s/articleView?id=xcloud.security_require_2fa_api.htm">Multi-Factor Authentication for API Access</a> — Salesforce Help</li>
+  <li><a href="https://help.salesforce.com/s/articleView?id=xcloud.mfa_phishing_resistant.htm">Phishing-Resistant MFA Requirement for Privileged Users</a> — Salesforce Help</li>
+  <li><a href="https://help.salesforce.com/s/articleView?id=xcloud.mfa_automation_totp.htm">Complete MFA Challenges for Automation Users</a> — Salesforce Help</li>
+  <li><a href="https://help.salesforce.com/s/articleView?id=xcloud.mfa_passkeys.htm">Passkeys for MFA</a> — Salesforce Help</li>
+  <li><a href="https://help.salesforce.com/s/articleView?id=xcloud.security_optimize_verification_method_registration.htm">Verification Method Selection During MFA Registration</a> — Salesforce Help</li>
+  <li><a href="https://help.salesforce.com/s/articleView?id=xcloud.security_frontdoorjsp.htm">Using Frontdoor.jsp to Bridge an Existing Session Into Salesforce</a> — Salesforce Help</li>
+  <li><a href="https://playwright.dev/docs/api/class-credentials">Credentials (virtual WebAuthn authenticator)</a> — Playwright API docs, v1.61+</li>
+  <li><a href="https://playwright.dev/docs/api/class-browsercontext">BrowserContext</a> — Playwright API docs</li>
+</ul>
+
+<footer>
+  Prepared as an internal technical spike review. Flags under §6 reflect Salesforce's published guidance as of
+  this writing and should be re-checked against current docs before implementation, since MFA enforcement
+  timelines and policies are actively rolling out through 2026.
+</footer>
+
+</body>
+</html>

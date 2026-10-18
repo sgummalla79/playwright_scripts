@@ -147,3 +147,8 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# local secrets (passkey + JWT key)
+.secrets/
+test-results/
+playwright-report/
