@@ -1,11 +1,8 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import type { SessionConfig } from '../config/config';
 import { SESSION_META_SUFFIX } from '../config/constants';
+import { restrictToOwner, writeOwnerOnly } from '../storage/ownerOnlyFile';
 import type { SessionMeta, SessionStore } from './sessionStore';
-
-/** Owner read/write only: session cookies are as sensitive as a password. */
-const OWNER_ONLY_FILE_MODE = 0o600;
 
 export class FileSessionStore implements SessionStore {
   readonly statePath: string;
@@ -18,9 +15,8 @@ export class FileSessionStore implements SessionStore {
 
   /** Call after Playwright writes the storageState file: it creates it world-readable (644). */
   saveMeta(meta: SessionMeta): void {
-    mkdirSync(dirname(this.metaPath), { recursive: true });
-    writeFileSync(this.metaPath, JSON.stringify(meta, null, 2), { mode: OWNER_ONLY_FILE_MODE });
-    if (existsSync(this.statePath)) chmodSync(this.statePath, OWNER_ONLY_FILE_MODE);
+    writeOwnerOnly(this.metaPath, JSON.stringify(meta, null, 2));
+    if (existsSync(this.statePath)) restrictToOwner(this.statePath);
   }
 
   loadMeta(): SessionMeta | undefined {

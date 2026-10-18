@@ -1,10 +1,7 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import type { PasskeyStoreConfig } from '../config/config';
+import { writeOwnerOnly } from '../storage/ownerOnlyFile';
 import type { PasskeyStore, StoredPasskey } from './passkeyStore';
-
-/** Owner read/write only: the file holds a replayable MFA private key. */
-const OWNER_ONLY_FILE_MODE = 0o600;
 
 export class FilePasskeyStore implements PasskeyStore {
   constructor(private readonly config: PasskeyStoreConfig) {}
@@ -15,8 +12,6 @@ export class FilePasskeyStore implements PasskeyStore {
   }
 
   save(passkey: StoredPasskey): void {
-    mkdirSync(dirname(this.config.storePath), { recursive: true });
-    writeFileSync(this.config.storePath, JSON.stringify(passkey, null, 2), { mode: OWNER_ONLY_FILE_MODE });
-    chmodSync(this.config.storePath, OWNER_ONLY_FILE_MODE);
+    writeOwnerOnly(this.config.storePath, JSON.stringify(passkey, null, 2));
   }
 }
